@@ -41,17 +41,19 @@ Two consequences of the dual-battery design:
 1. **Telemetry is per pack.** Each pack is monitored independently, with an alarm on significant imbalance between them.
 2. **Hot-swap is a viable fallback.** Because packs can be exchanged without powering down, "return to base for a supervised battery exchange" is a legitimate deliverable if autonomous docking proves infeasible.
 
-### 2.1 Charging route — undecided
+### 2.1 Charging route — official dock confirmed
 
-No official charging dock for the A2 Pro has been identified. Three routes are under consideration:
+Unitree publishes an official charging accessory for the A2 — the **Contact Charging Board** (Unitree A2 SDK Development Guide, "Guidance of Charge Pad"). It is not a drive-up connector dock like the Go2's; instead, the robot must **lie down** on a flat pad (forward or backward, never on its side) so that **two electrode contacts on its underside** touch two electrode contacts on the pad. The pad is powered by a lithium battery charger box from a 110–220V AC supply, and charging stops automatically once the battery is full.
+
+As documented, this positioning step is currently **manual**: an operator uses the remote controller to align the robot to a printed "charging pad sticker" marking the correct spot and orientation, by eye. Three routes are under consideration for making this autonomous:
 
 | Route | Approach | Risk |
 |---|---|---|
-| A | Integrate an official dock, if one exists and is procured | Low — depends on availability |
-| B | Build a custom dock with charging contacts and AprilTag alignment | High — adds a mechanical and electrical sub-project |
+| A | Automate alignment onto the official Contact Charging Board using vision (an AprilTag placed at the sticker's position, driving a closed-loop approach in place of manual remote control) | Low-Medium — hardware exists; the autonomy layer is this project's own work |
+| B | Build a custom dock with charging contacts and AprilTag alignment, as a fallback if the official pad proves unsuitable for autonomous approach (e.g. tolerance too tight for available sensing) | High — adds a mechanical and electrical sub-project |
 | C | Return to base for a supervised manual battery exchange | Low — less autonomous, but achievable |
 
-Current plan: implement Route C as a guaranteed deliverable, then extend to A or B if hardware and schedule allow.
+Current plan: pursue Route A as the primary target, since the hardware already exists and the remaining work — autonomous approach and lie-down alignment — is squarely within this project's scope. Route C remains the guaranteed fallback deliverable if the electrode-contact tolerance proves too tight to hit autonomously within the project timeline.
 
 ---
 
@@ -147,15 +149,15 @@ The margin covers navigation inefficiency, detours around unmapped obstacles, an
 | Simulation modules | Done — capacity constant still needs updating |
 | Risk assessment | Drafted, awaiting signatures |
 | SDK access | Pending |
-| Charging route decision | Pending — see Section 2.1 |
+| Charging route decision | Route A confirmed viable — official Contact Charging Board exists; automating the lie-down alignment (currently manual) is this project's task, see Section 2.1 |
 | Hardware access | Pending |
 
 ### Open questions
 
 Several of these determine the technical approach and cannot be deferred:
 
-1. Does an official A2 charging dock exist, and will one be available?
-2. What is the charger specification — voltage, current, connector? Needed for any custom dock design.
+1. ~~Does an official A2 charging dock exist?~~ Resolved — yes, the Contact Charging Board (see Section 2.1). Remaining question: can it be procured in time, and what tolerance does autonomous alignment need to hit reliably?
+2. Electrode contact tolerance: how much positioning error can the pad accept before the two electrode pairs fail to make contact? This sizes the accuracy AprilTag-based alignment needs to achieve.
 3. Access to the A2 SDK Development Guide and developer credentials.
 4. What battery data does the SDK expose per pack — charge, voltage, current, temperature, charging state?
 5. Is the A2 supported by `unitree_ros2`? The official repository lists Go2, B2, H1 and G1 only; a bridge may be required.
@@ -182,6 +184,7 @@ A formal risk assessment covering twelve hazards has been prepared separately an
 
 **Platform**
 - Unitree developer support — https://support.unitree.com
+- Unitree A2 SDK Development Guide, Contact Charging Board — https://support.unitree.com/home/en/A2_SDK_Development_Guide/a2_charge_pad
 - Unitree SDK2 — https://github.com/unitreerobotics/unitree_sdk2
 - Unitree ROS 2 — https://github.com/unitreerobotics/unitree_ros2
 
