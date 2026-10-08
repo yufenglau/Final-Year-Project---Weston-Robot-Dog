@@ -1,4 +1,4 @@
-# Autonomous Return-to-Base and Battery Charging for a Quadruped Inspection Robot
+# Autonomous Return-to-Base and Battery Charging for a Quadruped Inspection Robot (Updating...)
 
 Power management for an autonomous site-documentation robot. The robot carries a 360-degree camera around a construction site, and this repository handles the part that keeps it running: monitoring its batteries, predicting remaining range, deciding when it must stop work, navigating back to its charging station, and docking.
 
