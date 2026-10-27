@@ -1,0 +1,125 @@
+# Hesai driver config for the A2 PRO's two JT128 LiDARs (runs on PC2).
+# Based on HesaiLidar_ROS_2.0/config/config.yaml; IPs/ports from Unitree's slam_nav config
+# (hs_lidar_jt128/config.yaml) and our own packet capture on PC2 (ROBOT_FACTS.md, 2026-09-30).
+#
+# SAFETY (read before changing anything):
+#   * standby_mode and speed MUST stay -1. Any other value makes the driver WRITE that setting
+#     into the LiDAR over PTC (checked in the SDK source, libhesai/Lidar/lidar.h). With -1 the
+#     driver only LISTENS to UDP and READS the angle-calibration file over PTC.
+#   * Topic names are our own (/lidar_a, /lidar_b). Never publish to /utlidar/* or
+#     /unitree/slam_lidar/*: robot-side programs already subscribe to those.
+#   * Points stay in each LiDAR's own frame (transform_flag false). obstacle_sectors.py applies
+#     the mounting transform, so it can be changed without restarting the driver.
+#
+# Which one is front and which is rear is still unknown: find out with the cover test (guide step 6).
+
+lidar:
+  - driver:
+      use_gpu: false
+      source_type: 1
+      lidar_udp_type:
+        device_ip_address: 192.168.124.20
+        udp_port: 2368
+        ptc_port: 9347
+        multicast_ip_address: ""
+        use_ptc_connected: true
+        host_ptc_port: 0
+        correction_file_path: ""
+        firetimes_path: ""
+        recv_point_cloud_timeout: -1
+        ptc_connect_timeout: -1
+        host_ip_address: ""
+        fault_message_port: 0
+        standby_mode: -1          # KEEP -1 (never write to the LiDAR)
+        speed: -1                 # KEEP -1 (never write to the LiDAR)
+        ptc_mode: 0
+        certFile: ""
+        privateKeyFile: ""
+        caFile: ""
+      use_timestamp_type: 0
+      frame_start_azimuth: 0
+      thread_num: 2
+      transform_flag: false
+      x: 0
+      y: 0
+      z: 0
+      roll: 0
+      pitch: 0
+      yaw: 0
+      fov_start: -1
+      fov_end: -1
+      channel_fov_filter_path: ""
+      multi_fov_filter_ranges: ""
+      enable_packet_loss_tool: true
+      distance_correction_flag: false
+      xt_spot_correction: false
+      device_udp_src_port: 0
+      device_fault_port: 0
+      frame_frequency: 0
+      default_frame_frequency: 10.0
+      echo_mode_filter: 0
+    ros:
+      ros_frame_id: lidar_a
+      ros_recv_packet_topic: /lidar_a/packets
+      ros_send_packet_topic: /lidar_a/packets
+      ros_send_point_cloud_topic: /lidar_a/points
+      ros_send_imu_topic: /lidar_a/imu
+      ros_send_packet_loss_topic: /lidar_a/packets_loss
+      send_packet_ros: false
+      send_point_cloud_ros: true
+      send_imu_ros: true
+
+  - driver:
+      use_gpu: false
+      source_type: 1
+      lidar_udp_type:
+        device_ip_address: 192.168.124.21
+        udp_port: 2369
+        ptc_port: 9347
+        multicast_ip_address: ""
+        use_ptc_connected: true
+        host_ptc_port: 0
+        correction_file_path: ""
+        firetimes_path: ""
+        recv_point_cloud_timeout: -1
+        ptc_connect_timeout: -1
+        host_ip_address: ""
+        fault_message_port: 0
+        standby_mode: -1          # KEEP -1 (never write to the LiDAR)
+        speed: -1                 # KEEP -1 (never write to the LiDAR)
+        ptc_mode: 0
+        certFile: ""
+        privateKeyFile: ""
+        caFile: ""
+      use_timestamp_type: 0
+      frame_start_azimuth: 0
+      thread_num: 2
+      transform_flag: false
+      x: 0
+      y: 0
+      z: 0
+      roll: 0
+      pitch: 0
+      yaw: 0
+      fov_start: -1
+      fov_end: -1
+      channel_fov_filter_path: ""
+      multi_fov_filter_ranges: ""
+      enable_packet_loss_tool: true
+      distance_correction_flag: false
+      xt_spot_correction: false
+      device_udp_src_port: 0
+      device_fault_port: 0
+      frame_frequency: 0
+      default_frame_frequency: 10.0
+      echo_mode_filter: 0
+    ros:
+      ros_frame_id: lidar_b
+      ros_recv_packet_topic: /lidar_b/packets
+      ros_send_packet_topic: /lidar_b/packets
+      ros_send_point_cloud_topic: /lidar_b/points
+      ros_send_imu_topic: /lidar_b/imu
+      ros_send_packet_loss_topic: /lidar_b/packets_loss
+      send_packet_ros: false
+      send_point_cloud_ros: true
+      send_imu_ros: true

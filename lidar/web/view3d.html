@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A2 LiDAR 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #ddd; font: 14px system-ui, sans-serif; overflow: hidden; }
+  #hud { position: absolute; top: 8px; left: 8px; padding: 8px 10px; background: rgba(0,0,0,0.65); border-radius: 6px;
+         line-height: 1.5; max-width: calc(100vw - 32px); }
+  #hud b { color: #fff; }
+  #banner { font-weight: 700; font-size: 16px; }
+  .red { color: #ff5050; } .yellow { color: #ffd200; } .green { color: #3ddc5a; } .cyan { color: #19d3da; }
+  #controls { position: absolute; bottom: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 5px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { background: #3a3a3a; }
+  #legend { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); padding: 6px 10px; border-radius: 6px; font-size: 12px; }
+  .sw { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 10px; border-radius: 2px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="hud"><div id="banner">connecting...</div><div id="line1"></div><div id="line2"></div></div>
+<div id="controls">
+  <button id="pause">Pause stream</button>
+  <button data-view="persp">3D</button>
+  <button data-view="top">Top</button>
+  <button data-view="side">Side</button>
+  <button data-view="behind">Behind</button>
+</div>
+<div id="legend">
+  <span class="sw" style="background:#777"></span>floor
+  <span class="sw" style="background:#ffa41a"></span>obstacle
+  <span class="sw" style="background:#ff2a1a"></span>tall obstacle
+  <span class="sw" style="background:#ff0040"></span>inside oval
+  <span class="sw" style="background:#3a6fd0"></span>too high
+  &nbsp; drag = rotate · right-drag = pan · wheel = zoom
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>window.THREE || document.write('<script src="three.min.js"><\/script>');</script>
+<script>
+"use strict";
+const MAXP = 40000;
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 100);
+camera.up.set(0, 0, 1);                       // robot frame: x forward, y left, z up
+
+// --- simple orbit controls (no extra library) ---
+const target = new THREE.Vector3(0.5, 0, -0.1);
+let az = Math.PI * 1.15, el = 0.55, dist = 5.0;
+function placeCamera() {
+  el = Math.max(-0.2, Math.min(1.55, el));
+  dist = Math.max(0.5, Math.min(40, dist));
+  camera.position.set(target.x + dist * Math.cos(el) * Math.cos(az),
+                      target.y + dist * Math.cos(el) * Math.sin(az),
+                      target.z + dist * Math.sin(el));
+  camera.lookAt(target);
+}
+let drag = null;
+renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
+renderer.domElement.addEventListener("pointerdown", e => {
+  drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener("pointerup", () => drag = null);
+renderer.domElement.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.pan) {
+    const k = dist * 0.0015;
+    const right = new THREE.Vector3(-Math.sin(az), Math.cos(az), 0);
+    const fwd = new THREE.Vector3(-Math.cos(az), -Math.sin(az), 0);
+    target.addScaledVector(right, dx * k).addScaledVector(fwd, dy * k);
+  } else {
+    az -= dx * 0.006; el += dy * 0.006;
+  }
+  placeCamera();
+});
+renderer.domElement.addEventListener("wheel", e => { e.preventDefault(); dist *= Math.exp(e.deltaY * 0.001); placeCamera(); },
+                                      { passive: false });
+const VIEWS = { persp: [Math.PI * 1.15, 0.55, 5], top: [Math.PI, 1.55, 8], side: [Math.PI / 2, 0.15, 5], behind: [Math.PI, 0.3, 4] };
+document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
+  [az, el, dist] = VIEWS[b.dataset.view]; target.set(0.5, 0, -0.1); placeCamera();
+});
+
+// --- scene objects ---
+const grid = new THREE.GridHelper(12, 24, 0x444444, 0x2a2a2a);
+grid.rotation.x = Math.PI / 2;
+scene.add(grid);
+const ringMat = new THREE.LineBasicMaterial({ color: 0x555555 });
+for (let r = 1; r <= 6; r++) {
+  const c = new THREE.EllipseCurve(0, 0, r, r, 0, 2 * Math.PI).getPoints(96);
+  const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(c), ringMat);
+  ring.userData.floor = true; scene.add(ring);
+}
+const bodyBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+                                       new THREE.LineBasicMaterial({ color: 0xffffff }));
+scene.add(bodyBox);
+const nose = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0.05), 0.8, 0xffffff, 0.15, 0.08);
+scene.add(nose);
+const ovalMat = new THREE.LineBasicMaterial({ color: 0x19d3da });
+let ovalLine = null;
+const lidarDots = [0, 1].map(() => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffee00 }));
+  scene.add(m); return m;
+});
+
+const geom = new THREE.BufferGeometry();
+const pos = new Float32Array(MAXP * 3), col = new Float32Array(MAXP * 3);
+geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+geom.setAttribute("color", new THREE.BufferAttribute(col, 3));
+geom.setDrawRange(0, 0);
+const cloud = new THREE.Points(geom, new THREE.PointsMaterial({ size: 0.035, vertexColors: true }));
+scene.add(cloud);
+
+let lastShape = "";
+function updateShapes(st) {
+  const fz = st.floor;
+  grid.position.z = fz;
+  scene.children.forEach(o => { if (o.userData.floor) o.position.z = fz + 0.002; });
+  const [bl, bw] = st.body;
+  const top = 0.12;
+  bodyBox.scale.set(2 * bl, 2 * bw, top - fz);
+  bodyBox.position.set(0, 0, (top + fz) / 2);
+  st.lidars.forEach((p, i) => lidarDots[i].position.set(p[0], p[1], p[2]));
+  const shape = st.oval.join(",") + "@" + fz.toFixed(2);
+  if (shape !== lastShape) {
+    if (ovalLine) scene.remove(ovalLine);
+    const [fx, bx, ay] = st.oval, n = st.oval_exp || 2, c = [];
+    for (let i = 0; i < 160; i++) {                      // rounded oval: own reach front / back / sides
+      const t = 2 * Math.PI * i / 160, ct = Math.cos(t), sn = Math.sin(t);
+      c.push(new THREE.Vector2(Math.sign(ct) * Math.pow(Math.abs(ct), 2 / n) * (ct >= 0 ? fx : bx),
+                               Math.sign(sn) * Math.pow(Math.abs(sn), 2 / n) * ay));
+    }
+    ovalLine = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(c), ovalMat);
+    ovalLine.position.z = fz + 0.01; scene.add(ovalLine); lastShape = shape;
+  }
+  ovalMat.color.set(st.freeze ? 0xff3030 : 0x19d3da);
+}
+
+function updateCloud(n, xyz, cls, hcm, band) {
+  const top = band[1] * 100, low = band[0] * 100;
+  for (let i = 0; i < n; i++) {
+    pos[3 * i] = xyz[3 * i] / 100; pos[3 * i + 1] = xyz[3 * i + 1] / 100; pos[3 * i + 2] = xyz[3 * i + 2] / 100;
+    let r, g, b;
+    switch (cls[i]) {
+      case 0: r = g = b = 0.42; break;                                   // floor
+      case 2: r = 0.20; g = 0.38; b = 0.75; break;                       // too high
+      case 3: r = 1.0; g = 0.0; b = 0.25; break;                         // inside the oval
+      default: {                                                          // obstacle: orange -> red with height
+        const t = Math.min(1, Math.max(0, (hcm[i] - low) / (top - low)));
+        r = 1.0; g = 0.64 - 0.5 * t; b = 0.1;
+      }
+    }
+    col[3 * i] = r; col[3 * i + 1] = g; col[3 * i + 2] = b;
+  }
+  geom.setDrawRange(0, n);
+  geom.attributes.position.needsUpdate = true;
+  geom.attributes.color.needsUpdate = true;
+}
+
+// --- HUD ---
+const $ = id => document.getElementById(id);
+const fmt = d => d >= 9 ? "clear" : d.toFixed(2) + " m";
+function hud(st, mbps, fps) {
+  const b = $("banner");
+  if (st.freeze) { b.className = "red"; b.textContent = `OVAL: object ${st.oval_where} -> teleop FREEZE (${st.oval_n} pts)`; }
+  else if (st.front <= 0.25) { b.className = "red"; b.textContent = `front ${fmt(st.front)} -> forward blocked`; }
+  else if (st.front < 0.45) { b.className = "yellow"; b.textContent = `front ${fmt(st.front)} -> forward slowed`; }
+  else { b.className = "green"; b.textContent = "clear"; }
+  const lid = Object.entries(st.fresh).map(([k, v]) => `${k} ${v ? "OK" : "<span class=red>STALE</span>"}`).join(" · ");
+  $("line1").innerHTML = `<b>front</b> ${fmt(st.front)} · <b>left</b> ${fmt(st.left)} · <b>right</b> ${fmt(st.right)} · `
+    + `<b>oval</b> ${st.oval_n} pts · floor ${st.floor.toFixed(2)} m · tilt ${st.tilt[0]}/${st.tilt[1]}°`;
+  $("line2").innerHTML = `${lid} · ${st.n} points · <b>${mbps.toFixed(2)} Mbit/s</b> · ${fps.toFixed(1)} fps · ${st.t}`;
+}
+
+// --- stream (long-poll, compressed) ---
+let paused = false, frameId = -1;
+const hist = [];
+$("pause").onclick = () => {
+  paused = !paused;
+  $("pause").textContent = paused ? "Resume stream" : "Pause stream";
+  if (paused) { $("banner").className = "yellow"; $("banner").textContent = "PAUSED - no data used"; }
+};
+async function inflate(buf) {
+  const s = new Blob([buf]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return await new Response(s).arrayBuffer();
+}
+async function loop() {
+  for (;;) {
+    if (paused) { await new Promise(r => setTimeout(r, 300)); continue; }
+    try {
+      const r = await fetch(`/frame?after=${frameId}`, { cache: "no-store" });
+      if (r.status !== 200) continue;
+      frameId = +r.headers.get("X-Frame-Id");
+      const buf = await r.arrayBuffer();
+      const now = performance.now();
+      hist.push([now, buf.byteLength]);
+      while (hist.length && now - hist[0][0] > 5000) hist.shift();
+      const span = Math.max(1, (now - hist[0][0]) / 1000);
+      const mbps = hist.reduce((s, h) => s + h[1], 0) * 8 / 1e6 / span;
+      const raw = await inflate(buf);
+      const dv = new DataView(raw);
+      const jl = dv.getUint32(0, true), n = dv.getUint32(4, true);
+      const st = JSON.parse(new TextDecoder().decode(new Uint8Array(raw, 8, jl)));
+      let o = 8 + jl;
+      const xyz = new Int16Array(raw.slice(o, o + n * 6)); o += n * 6;
+      const cls = new Uint8Array(raw, o, n); o += n;
+      const hcm = new Uint8Array(raw, o, n);
+      updateShapes(st);
+      updateCloud(Math.min(n, MAXP), xyz, cls, hcm, st.band);
+      hud(st, mbps, hist.length > 1 ? (hist.length - 1) / span : 0);
+    } catch (e) {
+      $("banner").className = "red"; $("banner").textContent = "no connection to PC2 (tunnel running?) - retrying";
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+}
+
+function resize() {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+resize(); placeCamera();
+(function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); })();
+loop();
+</script>
+</body>
+</html>

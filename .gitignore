@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.bak*
+*.log
+*.pid
+logs/
+*.csv
+*.joblib
+build/
+install/
+log/
+.vscode/
